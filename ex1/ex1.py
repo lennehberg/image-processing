@@ -26,11 +26,28 @@ def generate_cum_hists(grayscale_vid_arr):
     :param grayscale_vid_arr: a numpy array representing a grayscale video
     :return: cumulative histogram list by frames
     """
+    hists = []
     cum_hists = []
     # iterate over frames and generate a cumulative histogram for each frame
     for frame in grayscale_vid_arr:
         temp_hist, _ = np.histogram(frame, bins=256, range=(0, 255))
+        hists.append(temp_hist)
         cum_hist = np.cumsum(temp_hist)
+        # append cum hist to cum hists list
+        cum_hists.append(cum_hist)
+
+    return hists, cum_hists
+
+
+def equalize_histogram(frame_hist, cum_hist):
+    """
+    run a simple histogram equalization algorithm
+    :param frame_hist: original frame histogram
+    :param cum_hist: cumulative frame histogram
+    :return:
+    """
+
+
 
 def main(video_path, video_type):
     """
@@ -47,7 +64,7 @@ def main(video_path, video_type):
     vid_arr = np.array(video)
     grayscale_vid_arr = convert_vid_arr_to_grayscale(vid_arr)
     # generate a cumulative histogram array from frames
-
+    hists, cum_hists = generate_cum_hists(grayscale_vid_arr)
     # run a histogram equalization
 
     # compute histogram differences for pairs in video
