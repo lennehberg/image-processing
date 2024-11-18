@@ -4,6 +4,7 @@ import numpy as np
 from PIL import Image
 import matplotlib.pyplot as plt
 
+
 def log_transform(video):
     c = 255 / np.log(1 + 255)
     # Iterate over each frame in the video
@@ -13,16 +14,12 @@ def log_transform(video):
             # Iterate over each column (width) in the frame
             for w in range(video.shape[2]):  # w is the width index
                 # Iterate over each color channel (RGB)
-                for c in range(video.shape[3]):  # c is the channel index (0: Red, 1: Green, 2: Blue)
-                    # print("true" if video[f, h, w, c] + 1 == 0 else "")
-                    if video[f, h, w, c] + 1 > 0:
-                        transformed = np.round(c * np.log(1 + video[f, h, w, c]))
-                        if transformed > 255:
-                            transformed = 255
-                        elif transformed < 0:
-                            transformed = 0
-                        video[f, h, w, c] = int(transformed)
+                if 1 + video[f, h, w] != 0:
+                    transformed = np.round(c * np.log(1 + video[f, h, w]))
+
+                    video[f, h, w] = int(transformed)
     print("finished log transforming!")
+    return video
 
 
 def quantize_histogram(hist, num_levels=16):
@@ -77,14 +74,14 @@ def create_lut(cum_hist, bins_num=256):
     for ind, level in enumerate(cum_hist):
         if level > 0:
             min_gray_level = ind
-            break # once the first index where the gray level isn't 0 is found, break loop
+            break  # once the first index where the gray level isn't 0 is found, break loop
 
     # get the highest gray level index (will always be 255 because of cumulative properties)
     max_gray_level = bins_num - 1
 
     for k in range(bins_num - 1):
         lut[k] = round((bins_num - 1) * ((cum_hist[k] - cum_hist[min_gray_level]) /
-                              (cum_hist[max_gray_level] - cum_hist[min_gray_level])))
+                                         (cum_hist[max_gray_level] - cum_hist[min_gray_level])))
 
     return lut
 
@@ -167,12 +164,12 @@ def main(video_path, video_type):
 
     # convert video to grayscale
     vid_arr = np.array(video)
-    grayscale_vid_arr = convert_vid_arr_to_grayscale(vid_arr)
+    grayscale_vid_arr = np.array(convert_vid_arr_to_grayscale(vid_arr))
 
     # show_video_frames(vid_arr)
 
     if video_type == '2':
-        log_transform(vid_arr)
+        grayscale_vid_arr = log_transform(grayscale_vid_arr)
 
     eq_prev_frame = np.zeros(grayscale_vid_arr[0].shape)
     eq_cur_frame = np.zeros(grayscale_vid_arr[0].shape)
@@ -241,7 +238,7 @@ def show_hists(hists):
         row = i // grid_size
         col = i % grid_size
         axes[row, col].bar(bins[:-1], hist, width=1, color='gray')
-        axes[row, col].set_title(f"Frame {i+1}")
+        axes[row, col].set_title(f"Frame {i + 1}")
         axes[row, col].set_xlim(0, 255)
         axes[row, col].set_ylim(0, hist.max())
 
