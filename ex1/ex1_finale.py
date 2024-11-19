@@ -5,7 +5,39 @@ from PIL import Image
 import matplotlib.pyplot as plt
 
 
-def convert_vid_arr_to_grayscale(vid_arr):
+def power_transform(frame, maxinpval):
+    c = 255 / np.log(1 + maxinpval) if 1 + maxinpval != 0 else 1
+    gamma = 10
+    frame = frame / 255
+    frame = (frame ** gamma) * c
+    frame = 255 * (frame / np.max(frame))
+    return frame
+
+
+def quantize_histogram(hist, num_levels=16):
+    """
+    Quantizes the histogram by reducing the number of gray levels.
+
+    :param hist: Input histogram (1D numpy array with 256 bins)
+    :param num_levels: The number of gray levels to reduce the histogram to
+    :return: Quantized histogram (1D numpy array with reduced bins)
+    """
+    # Determine the range for each quantization level
+    max_value = 255
+    step = max_value // num_levels
+
+    # Create an array to hold the quantized histogram
+    quantized_hist = np.zeros(num_levels, dtype=np.uint8)
+
+    # Map the original histogram bins to quantized levels
+    for i in range(256):
+        quantized_level = min(i // step, num_levels - 1)  # Find quantization level
+        quantized_hist[quantized_level] += hist[i]  # Accumulate the values into the quantized bin
+
+    return quantized_hist
+
+
+def convert_vid_arr_to_grayscale(vid_arr, video_type):
     """
     Converts a video array (numpy array) to a grayscale video array (numpy array)
     :param vid_arr: a numpy array representing the video
@@ -18,6 +50,8 @@ def convert_vid_arr_to_grayscale(vid_arr):
     for frame in vid_arr:
         grayscale_frame = Image.fromarray(frame).convert("L")
         grayscale_frame_arr = np.array(grayscale_frame).astype(np.uint16)
+        if video_type == '2':
+            grayscale_frame_arr = power_transform(grayscale_frame_arr, np.max(grayscale_frame_arr))
         grayscale_frames.append(grayscale_frame_arr)
 
     # return frames list
@@ -35,7 +69,7 @@ def apply_lut(hist, lut):
 
 def calculate_hist(frame, bins_num=256):
     """calculates the histogram of the frame"""
-    hist, _ = np.histogram(frame, bins=bins_num, range=(0, bins_num))
+    hist, _ = np.histogram(frame, bins=bins_num, range=(0, bins_num - 1))
     return hist
 
 
@@ -46,21 +80,23 @@ def normalize_cum_hist(cum_hist, pixel_count, level=256):
 def linear_stretch(np_arr, new_min, new_max):
     """Linearly stretch the array to new min and new max"""
 
-    old_min = np.min(np_arr)
+    old_min = np.argmax(np_arr != 0)
     old_max = np.max(np_arr)
 
     numer = np_arr - old_min
     denom = old_max - old_min
 
+    if denom == 0:
+        return np.full_like(np_arr, new_min)
+
     stretched = (numer / denom) * (new_max - new_min) + new_min
+    stretched[stretched < 0] = 0
     return stretched
 
 
 def histogram_difference(hist1, hist2):
     """Calculates the Chi-squared histogram difference."""
-    diffs = np.abs(hist1 - hist2)
-    diff = np.sum(diffs)
-    return diff
+    return np.sum((hist1 - hist2) ** 2 / (hist1 + hist2 + 1e-10))
 
 
 def equalize_frame_histogram(frame, levels=256):
@@ -71,9 +107,9 @@ def equalize_frame_histogram(frame, levels=256):
     cum_hist = np.cumsum(hist)
     # normalize cdf
     normed_cdf = normalize_cum_hist(cum_hist, frame.size, levels)
-    # perform linear stretching if min value isnt 0 and max value isnt 255
-    if np.min(normed_cdf) < 0 or np.max(normed_cdf) > levels - 1:
-        normed_cdf = linear_stretch(normed_cdf, 0, levels - 1)
+    # perform linear stretching if min value isn't 0 and max value isn't 255
+    # if np.min(normed_cdf) != 0 or np.max(normed_cdf) != levels - 1:
+    normed_cdf = linear_stretch(normed_cdf, 0, levels - 1)
 
     # round values in cdf to get mappings for lut
     cdf = np.round(normed_cdf)
@@ -95,13 +131,15 @@ def main(video_path, video_type):
 
     # convert video to grayscale
     vid_arr = np.array(video)
-    grayscale_vid_arr = np.array(convert_vid_arr_to_grayscale(vid_arr))
+    show_video_frames(vid_arr)
+    grayscale_vid_arr = np.array(convert_vid_arr_to_grayscale(vid_arr, video_type))
     eq_prev_frame = np.zeros(grayscale_vid_arr[0].shape)
     eq_cur_frame = np.zeros(grayscale_vid_arr[0].shape)
     max_diff = 0
     max_cut_ind = 0
     # Equalize first frame and get it's cumulative histogram
     eq_prev_frame = equalize_frame_histogram(grayscale_vid_arr[0])
+    print(f"frame size of normalization is: {grayscale_vid_arr[0].size}")
     eq_prev_cum_hist = (np.cumsum(eq_prev_frame))
 
     # iterate over rest of the frames and get their differences from prev frame
@@ -126,12 +164,10 @@ def main(video_path, video_type):
             # set the max diff to cur diff
             max_diff = hist_diff
             # set the indexes if the frame for the cut
-            max_cut_ind = (i - 1, i)
-
-
+            max_cut_ind = (i, i + 1)
 
     print(f"cut detected at frames {max_cut_ind} with diff {max_diff}")
-
+    return max_cut_ind
 
 def show_video_frames(vid_arr):
     num_frames = len(vid_arr)
