@@ -164,11 +164,11 @@ def main(video_path, video_type):
     return detect_cuts(grayscale_vid_arr, video_type)
 
 
-if __name__ == "__main__":
-    video_path = sys.argv[1]
-    video_type = sys.argv[2]
-    # video = media.read_video(video_path)
-    # vid_arr = np.array(video)
-    # show_video_frames(vid_arr)
-    # debug to see where frame cut is
-    print(main(video_path=video_path, video_type=video_type))
+# if __name__ == "__main__":
+#     video_path = sys.argv[1]
+#     video_type = sys.argv[2]
+#     # video = media.read_video(video_path)
+#     # vid_arr = np.array(video)
+#     # show_video_frames(vid_arr)
+#     # debug to see where frame cut is
+#     print(main(video_path=video_path, video_type=video_type))
