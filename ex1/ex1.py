@@ -121,8 +121,8 @@ def detect_cuts(grayscale_vid_arr, video_type):
     for i in range(1, len(grayscale_vid_arr)):
         # if video type is 1, just check differences between cumulative histograms
         if video_type == '1':
-            hist_diff = __histogram_difference(__calculate_hist(grayscale_vid_arr[i - 1]),
-                                               __calculate_hist(grayscale_vid_arr[i]))
+            hist_diff = __histogram_difference(np.cumsum(__calculate_hist(grayscale_vid_arr[i - 1])),
+                                               np.cumsum(__calculate_hist(grayscale_vid_arr[i])))
         else:  # if video type is 2, compare equalized cumulative histograms
             # equalize the current frame's histogram, and get it's cumulative histogram
             eq_cur_hist = __equalize_frame_histogram(grayscale_vid_arr[i])
@@ -164,12 +164,11 @@ def main(video_path, video_type):
     return detect_cuts(grayscale_vid_arr, video_type)
 
 
-# if __name__ == "__main__":
-#     video_path = sys.argv[1]
-#     video_type = sys.argv[2]
-#     # video = media.read_video(video_path)
-#     # vid_arr = np.array(video)
-#     # show_video_frames(vid_arr)
-#     # debug to see where frame cut is
-#     print(main(video_path=video_path, video_type=video_type))
-#
+if __name__ == "__main__":
+    video_path = sys.argv[1]
+    video_type = sys.argv[2]
+    # video = media.read_video(video_path)
+    # vid_arr = np.array(video)
+    # show_video_frames(vid_arr)
+    # debug to see where frame cut is
+    print(main(video_path=video_path, video_type=video_type))
