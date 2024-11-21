@@ -7,7 +7,7 @@ def procure_category_1():
     vid1_path = "videos/video1_category1.mp4"
     vid2_path = "videos/video2_category1.mp4"
 
-    plot_results(vid1_path, vid2_path, '1')
+    plot_results(vid1_path, vid2_path, '1', 1)
 
 
 def procure_category_2():
@@ -15,11 +15,11 @@ def procure_category_2():
     vid1_path = "videos/video3_category2.mp4"
     vid2_path = "videos/video4_category2.mp4"
 
-    plot_results(vid1_path, vid2_path, '2')
-    plot_results(vid1_path, vid2_path, '1')
+    plot_results(vid1_path, vid2_path, '2', 3)
+    plot_results(vid1_path, vid2_path, '1', 3)
 
 
-def plot_results(vid1_path, vid2_path, video_type):
+def plot_results(vid1_path, vid2_path, video_type, start_ind):
     # read videos using mediapy
     vid1 = cutDetect.media.read_video(vid1_path)
     vid2 = cutDetect.media.read_video(vid2_path)
@@ -32,7 +32,7 @@ def plot_results(vid1_path, vid2_path, video_type):
 
     # show the cumulative histogram of the frame below the frame
     grayscale_frames = cutDetect.convert_vid_arr_to_grayscale([vid1_arr[vid1_cut_ind[0]],
-                                                               vid1_arr[vid1_cut_ind[1]]], video_type)
+                                                               vid1_arr[vid1_cut_ind[1]]])
     cdf1 = cutDetect.np.cumsum(cutDetect.__calculate_hist(grayscale_frames[0]))
     cdf2 = cutDetect.np.cumsum(cutDetect.__calculate_hist(grayscale_frames[1]))
     bins = cutDetect.np.arange(257)
@@ -62,17 +62,17 @@ def plot_results(vid1_path, vid2_path, video_type):
     axes1[1][1].set_ylabel("Cumulative Frequency")
 
     # save figure to disk
-    plt.savefig("report_extras/vid1_cut.png", dpi=300, bbox_inches="tight")
+    plt.savefig(f"report_extras/vid{start_ind}_cut_cat{video_type}.png", dpi=300, bbox_inches="tight")
 
-    plt.tight_layout()
-    plt.show()
+    # plt.tight_layout()
+    # plt.show()
 
     # do the same for video 2
     fig2, axes2 = cutDetect.plt.subplots(2, 2, figsize=(10, 5))
 
     # show the cumulative histogram of the frame below the frame
     grayscale_frames = cutDetect.convert_vid_arr_to_grayscale([vid2_arr[vid2_cut_ind[0]],
-                                                               vid2_arr[vid2_cut_ind[1]]], 1)
+                                                               vid2_arr[vid2_cut_ind[1]]])
     cdf1 = cutDetect.np.cumsum(cutDetect.__calculate_hist(grayscale_frames[0]))
     cdf2 = cutDetect.np.cumsum(cutDetect.__calculate_hist(grayscale_frames[1]))
 
@@ -94,21 +94,22 @@ def plot_results(vid1_path, vid2_path, video_type):
 
     # plot the second frame's cumulative histogram
     axes2[1][1].bar(bins[:-1], cdf2, width=1, color="black")
-    axes2[1][1].set_title("CDF (Grayscale / Intensity Corrected)")
+    axes2[1][1].set_title("CDF (Grayscale)")
     axes2[1][1].set_xlabel("Pixel Intensity")
     axes2[1][1].set_ylabel("Cumulative Frequency")
 
     # save figure to disk
-    plt.savefig("report_extras/vid2_cut.png", dpi=300, bbox_inches="tight")
+    plt.savefig(f"report_extras/vid{start_ind + 1}_cut_cat{video_type}.png", dpi=300, bbox_inches="tight")
 
-    plt.tight_layout()
-    plt.show()
+    # plt.tight_layout()
+    # plt.show()
 
 
 def main():
     """Main entry point for generating figures for report for ex1"""
     procure_category_1()
     procure_category_2()
+
 
 if __name__ == "__main__":
     main()
