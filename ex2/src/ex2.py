@@ -27,16 +27,25 @@ def plot_spectograms(original_audio, watermarked_audio, sr):
     plt.show()
 
 
-
-if __name__ == "__main__":
+def task1():
     add_watermark.add_watermark("audios/Task 1/task1.wav")
     og_arr, s_rate1 = librosa.load("audios/Task 1/task1.wav", sr=None)
-    watermarked_arr, s_rate2 = librosa.load("audios/Task 1/task1result.wav", sr=None)
-    plot_spectograms(og_arr, watermarked_arr, s_rate1)
+    good_watermarked_arr, s_rate2 = librosa.load("audios/Task 1/good_task1result.wav", sr=None)
+    bad_watermarked_arr, s_rate3 = librosa.load("audios/Task 1/bad_task1result.wav", sr=None)
+    plot_spectograms(og_arr, good_watermarked_arr, s_rate1)
+    plot_spectograms(og_arr, bad_watermarked_arr, s_rate1)
 
-    # Compute FFT of original and watermarked audio
-    original_fft = np.fft.fft(og_arr)
-    watermarked_fft = np.fft.fft(watermarked_arr)
+
+def task2():
+    for i in range(9):
+        add_watermark.add_watermark(f"audios/Task 2/{i}_watermarked.wav", index=i, task_num=2)
+        aud1, s_rate1 = librosa.load(f"audios/Task 2/{i}_watermarked.wav", sr=40000)
+        good_watermarked_arr, s_rate2 = librosa.load(f"audios/Task 2/good_task{i}result.wav", sr=None)
+        plot_spectograms(aud1, good_watermarked_arr, 40000)
+
+
+if __name__ == "__main__":
+    task2()
 
     # Plot FFT magnitude for comparison
     # plt.figure(figsize=(10, 6))
