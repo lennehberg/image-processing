@@ -28,8 +28,8 @@ def __inverse_fft(aud_fft):
 
 
 def __add_frequencies(aud_arr, s_rate):
-    high_freq_start = 21000
-    high_freq_end = 22000
+    high_freq_start = 18000
+    high_freq_end = 20000
     # run the fast fourier transform on the audio file to get
     # sine-cosine representation of the function related to the
     # audio array
@@ -73,6 +73,8 @@ def add_watermark(audio_file_path, index= 1, task_num= 1):
     # add high range frequencies to audio array
     good_watermarked_aud = add_sine_wave_watermark(aud_arr, s_rate, magnitude=0.01)
     bad_watermarked_aud = add_sine_wave_watermark(aud_arr, s_rate, watermark_freq=10000, magnitude=100)
+    # good_watermarked_aud = __add_frequencies(aud_arr, s_rate)
+    # bad_watermarked_aud = __add_frequencies(aud_arr, s_rate)
     # write to task1result.wav
     sf.write(good_out_file_path, good_watermarked_aud, s_rate)
     sf.write(bad_out_file_path, bad_watermarked_aud, s_rate)

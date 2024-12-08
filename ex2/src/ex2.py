@@ -4,26 +4,39 @@ import librosa
 import librosa.display
 import numpy as np
 import add_watermark
+import detect_watermark
+from scipy.io import wavfile
+from scipy.signal import stft
 
 
-def plot_spectograms(original_audio, watermarked_audio, sr):
-    # Compute and display spectrograms
-    plt.figure(figsize=(12, 8))
-    plt.subplot(2, 1, 1)
-    # original_audio = np.log(np.abs(original_audio) + 1)
-    # watermarked_audio = np.log(np.abs(watermarked_audio) + 1)
-    librosa.display.specshow(librosa.amplitude_to_db(np.abs(librosa.stft(original_audio)), ref=np.max),
-                             sr=sr, x_axis='time', y_axis='log', cmap='magma')
-    plt.colorbar(format='%+2.0f dB')
-    plt.title("Original Audio Spectrogram")
+def plot_spectograms(audio_path):
+    # Load the audio file
+    sample_rate, audio = wavfile.read(audio_path)
 
-    plt.subplot(2, 1, 2)
-    librosa.display.specshow(librosa.amplitude_to_db(np.abs(librosa.stft(watermarked_audio)), ref=np.max),
-                             sr=sr, x_axis='time', y_axis='log', cmap='magma')
-    plt.colorbar(format='%+2.0f dB')
-    plt.title("Watermarked Audio Spectrogram")
+    # Normalize the audio signal (if necessary)
+    if audio.ndim > 1:
+        audio = audio.mean(axis=1)  # Convert stereo to mono
+    audio = audio / np.max(np.abs(audio))
 
-    plt.tight_layout()
+    # Compute the STFT
+    f, t, Zxx = stft(audio, sample_rate, nperseg=1024, noverlap=512)
+
+    # Compute the magnitude of the STFT
+    magnitude = np.abs(Zxx)
+
+    # Normalize the magnitude to enhance brightness
+    magnitude_normalized = magnitude / np.max(magnitude)
+
+    # Apply log transformation (adjust scale as needed for brightness)
+    magnitude_db = 20 * np.log10(magnitude_normalized + 1e-10) + 50  # Shift for better visibility
+
+    # Plot the STFT (log magnitude)
+    plt.figure(figsize=(10, 6))
+    plt.pcolormesh(t, f, magnitude_db, shading='auto', cmap='magma')
+    plt.title("Brightened Log-Transformed STFT Magnitude of Audio")
+    plt.xlabel("Time (s)")
+    plt.ylabel("Frequency (Hz)")
+    plt.colorbar(label="Magnitude (dB)")
     plt.show()
 
 
@@ -32,16 +45,14 @@ def task1():
     og_arr, s_rate1 = librosa.load("audios/Task 1/task1.wav", sr=None)
     good_watermarked_arr, s_rate2 = librosa.load("audios/Task 1/good_task1result.wav", sr=None)
     bad_watermarked_arr, s_rate3 = librosa.load("audios/Task 1/bad_task1result.wav", sr=None)
-    plot_spectograms(og_arr, good_watermarked_arr, s_rate1)
-    plot_spectograms(og_arr, bad_watermarked_arr, s_rate1)
+    plot_spectograms("audios/Task 1/good_task1result.wav")
+    plot_spectograms("audios/Task 1/bad_task1result.wav")
 
 
 def task2():
     for i in range(9):
-        add_watermark.add_watermark(f"audios/Task 2/{i}_watermarked.wav", index=i, task_num=2)
-        aud1, s_rate1 = librosa.load(f"audios/Task 2/{i}_watermarked.wav", sr=40000)
-        good_watermarked_arr, s_rate2 = librosa.load(f"audios/Task 2/good_task{i}result.wav", sr=None)
-        plot_spectograms(aud1, good_watermarked_arr, 40000)
+        detect_watermark.detect_peak_spacing(f"audios/Task 2/{i}_watermarked.wav")
+        detect_watermark.display_spec_stft(f"audios/Task 2/{i}_watermarked.wav")
 
 
 if __name__ == "__main__":
