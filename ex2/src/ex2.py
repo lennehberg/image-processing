@@ -51,8 +51,8 @@ def task1():
 
 def task2():
     for i in range(9):
-        detect_watermark.detect_peak_spacing(f"audios/Task 2/{i}_watermarked.wav")
-        detect_watermark.display_spec_stft(f"audios/Task 2/{i}_watermarked.wav")
+        detect_watermark.detect_peak_spacing(f"../audios/Task 2/{i}_watermarked.wav")
+        detect_watermark.display_spec_stft(f"../audios/Task 2/{i}_watermarked.wav")
 
 
 if __name__ == "__main__":

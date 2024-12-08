@@ -46,7 +46,7 @@ def detect_peak_spacing(audio_path):
 
     # Compute the STFT
     f, t, Zxx = stft(audio, sample_rate, nperseg=1024, noverlap=512)
-
+    print(np.abs(Zxx))
     # Compute the magnitude of the STFT
     magnitude = np.abs(Zxx)
 
@@ -79,7 +79,7 @@ def detect_peak_spacing(audio_path):
     peak_spacings = np.diff(peak_freqs)
 
     # print("Detected peak frequencies:", peak_freqs)
-    print("Peak spacings (in Hz):", peak_spacings)
+    # print("Peak spacings (in Hz):", peak_spacings)
 
     return peak_freqs, peak_spacings
 
