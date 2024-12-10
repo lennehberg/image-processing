@@ -33,7 +33,7 @@ def plot_spectograms(audio_path):
     # Plot the STFT (log magnitude)
     plt.figure(figsize=(10, 6))
     plt.pcolormesh(t, f, magnitude_db, shading='auto', cmap='magma')
-    plt.title("Brightened Log-Transformed STFT Magnitude of Audio")
+    plt.title(f"Brightened Log-Transformed STFT Magnitude of {audio_path}")
     plt.xlabel("Time (s)")
     plt.ylabel("Frequency (Hz)")
     plt.colorbar(label="Magnitude (dB)")
@@ -50,13 +50,28 @@ def task1():
 
 
 def task2():
+    index_to_cat = [(1, "sin(2*pi*17.5e3*x + sin(2*pi*0.3*x))"),
+                    (1, "sin(2*pi*17.5e3*x + sin(2*pi*0.3*x))"),
+                    (1, "sin(2*pi*17.5e3*x + sin(2*pi*0.3*x))"),
+                    (2, "sin(2*pi*17.5e3*x + sin(2*pi*0.4*x))"),
+                    (2, "sin(2*pi*17.5e3*x + sin(2*pi*0.4*x))"),
+                    (2, "sin(2*pi*17.5e3*x + sin(2*pi*0.4*x))"),
+                    (3, "sin(2*pi*17.5e3*x + sin(2*pi*0.6*x))"),
+                    (3, "sin(2*pi*17.5e3*x + sin(2*pi*0.6*x))"),
+                    (3, "sin(2*pi*17.5e3*x + sin(2*pi*0.6*x))")]
     for i in range(9):
         detect_watermark.extract_watermark(f"audios/Task 2/{i}_watermarked.wav")
+        print(f"{i}_watermarked.wav has category {index_to_cat[i]} watermark")
         # detect_watermark.display_spec_stft(f"audios/Task 2/{i}_watermarked.wav")
 
 
+def task3():
+    plot_spectograms("audios/Task 3/task3_watermarked_method1.wav")
+    plot_spectograms("audios/Task 3/task3_watermarked_method2.wav")
+
+
 if __name__ == "__main__":
-    task2()
+    task3()
 
     # Plot FFT magnitude for comparison
     # plt.figure(figsize=(10, 6))
