@@ -120,52 +120,34 @@ def warp_frame(vid_frames, cumulative_mats):
 
 
 def make_pano(canvas, cumulative_mats, stab_mats, strip_center):
-    """
-    creates a panorama image by backward warping and pasting strips from canvas
-    :param canvas:
-    :param cumulative_mats:
-    :return:
-    """
-    # display_canvas_with_matplotlib(canvas[441])
     pano_frame = np.zeros(canvas[0].shape)
-    prev_strip_center = strip_center
-    # strip_width = abs(int(np.mean([mat[0, 2] for mat in stab_mats])))
-    for i in range(1, len(canvas)):  # start from 1 because 0 has empty canvas
-        # estimate the strip's width by setting it to the dx motion from this frame to the next
+    current_x = strip_center
+    
+    for i in range(1, len(canvas)):
         if i < len(canvas) - 1:
             strip_width = abs(stab_mats[i][0, 2])
         else:
-            strip_width = 2
-
-        # if no motion between frames, continue
+            strip_width = strip_width  # use previous width for last frame
+            
         if strip_width == 0:
             continue
-
-        # normalize the strip width so it is always even
-        if strip_width % 2 != 0:
-            strip_width += 1
-
-        # copy the values from the overlap between the frame and the strip
-        strip = canvas[i][:, int(np.floor(strip_center - strip_width)): int(np.ceil(strip_center + strip_width))]
-        # if len(strip[0]) == 0:
-        #     continue
-        # display_canvas_with_matplotlib(strip)
-        # backward warp the strip onto the canvas
-        warped_strip = cv2.warpAffine(strip, cumulative_mats[i - 1][:2, :], (pano_frame.shape[1], pano_frame.shape[0]), flags=cv2.WARP_INVERSE_MAP)
-        # display_canvas_with_matplotlib(warped_strip)
+            
+        # Ensure overlap between strips
+        strip = canvas[i][:, int(current_x - strip_width): int(current_x + strip_width)]
+        
+        warped_strip = cv2.warpAffine(strip, cumulative_mats[i - 1][:2, :], 
+                                     (pano_frame.shape[1], pano_frame.shape[0]), 
+                                     flags=cv2.WARP_INVERSE_MAP)
+        
         if i > 1:
+            # Create a smooth transition between strips
+            overlap = strip_width // 2
             mask = np.zeros(pano_frame.shape)
-            mask[:, int(prev_strip_center): int(strip_center)] = 255
-
-            pano_frame = np.maximum(warped_strip, pano_frame)
-
+            mask[:, int(current_x - overlap):int(current_x + overlap)] = 255
             pano_frame = pyramid_blend.blend_images(warped_strip, pano_frame, mask)
         else:
             pano_frame = warped_strip
-
-        prev_strip_center = strip_center
-        strip_center += strip_width
-
-        # display_canvas_with_matplotlib(pano_frame)
+            
+        current_x += strip_width
 
     return pano_frame
