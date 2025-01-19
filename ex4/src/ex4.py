@@ -13,6 +13,7 @@
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
+import ex3.src.pyramid_blend as pyramid_blend
 
 
 # 1. Align consecutive frames:
@@ -51,7 +52,8 @@ def stabilize_transforms(trans_mats):
     :param trans_mats: list of transformation matrices to stabilize
     :return: list of stabilized transformation matrices
     """
-    stabilized_transforms = []
+    stabilized_transforms = [np.eye(3)[:2, :]]
+    # stab_dy = np.mean([mat[1, 2] for mat in trans_mats])
 
     for mat in trans_mats:
         dx = mat[0, 2]
@@ -83,7 +85,7 @@ def display_canvas_with_matplotlib(canvas):
 
 
 # 3. Use motion composition to align frames on canvas
-def warp_frames(vid_frames, stab_trans_mats, a_frame_ind=0):
+def warp_frames(vid_frames, stab_trans_mats, transforms, a_frame_ind=0):
     """
     Warp frames according to stabilized transformation matrices and align them on a single canvas.
     Only max_dx is considered for the canvas size.
@@ -137,11 +139,12 @@ def warp_frames(vid_frames, stab_trans_mats, a_frame_ind=0):
         warped_frame = cv2.warpAffine(frame, warp_mat, (canvas_width, canvas_height), flags=cv2.WARP_INVERSE_MAP)
         # display_canvas_with_matplotlib(warped_frame)
         canvas.append(warped_frame)
-    return canvas
+    c_trans_list = [np.eye(3)] + lc_trans_list + rc_trans_list
+    return canvas, c_trans_list
 
 
 # 4. Create mosaic
-def make_pano(canvas, canvas_shape, strip_center, stab_trans_mats):
+def make_pano(canvas, canvas_shape, strip_center, stab_trans_mats, c_transforms):
     """
     make a pano by pasting strips at offset from center
     :param stab_trans_mats: stabilized matrices of transformations between frames
@@ -153,18 +156,44 @@ def make_pano(canvas, canvas_shape, strip_center, stab_trans_mats):
     # create a frame and set strip width to inital 0
     pano_frame = np.zeros(canvas_shape)
     strip_pos = 0
-
+    prev_strip_center = strip_center
+    # average the dx to strip width
+    # strip_width = abs(int(np.mean([mat[0, 2] for mat in stab_trans_mats])))
+    # print(strip_width)
     # update strip width according to dx
-    for i in range(1, len(canvas) - 1):
-        strip_width = int(abs(stab_trans_mats[i - 1][0, 2]))
+    for i in range(len(canvas) - 1):
+        strip_width = int(np.ceil(abs(stab_trans_mats[i][0, 2])))
+
+        if strip_width == 0:
+            continue
 
         if strip_width % 2 != 0:
             strip_width += 1
 
         strip = canvas[i][:, int(strip_center - strip_width // 2): int(strip_center + strip_width // 2)]
 
-        pano_frame[:, strip_pos: strip_pos + len(strip[0])] = strip
+        if len(strip[0]) == 0:
+            continue
+
+        # display_canvas_with_matplotlib(strip)
+        # Define a backward warp (reverse the transformation matrix)
+        # inverse_transform = np.linalg.inv(np.vstack([stab_trans_mats[i - 1], [0, 0, 1]]))  # Inverse of the transformation matrix
+        print(strip.shape)
+        print(strip_width)
+        # Warp the strip backward
+        warped_strip = cv2.warpAffine(strip, c_transforms[i][:2, :], (pano_frame.shape[1], pano_frame.shape[0]), flags=cv2.WARP_INVERSE_MAP)
+        # display_canvas_with_matplotlib(strip)
+        # display_canvas_with_matplotlib(warped_strip)
+        # # Apply the warped strip to the pano_frame
+        pano_frame = np.maximum(warped_strip, pano_frame)
+
+        mask = np.zeros(canvas_shape)
+        mask[:, prev_strip_center: strip_center] = 1
+
+        pano_frame = pyramid_blend.blend_images(warped_strip, pano_frame, mask)
+
         strip_pos += strip_width
+        prev_strip_center = strip_center
         strip_center += strip_width
 
     return pano_frame
