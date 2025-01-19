@@ -24,10 +24,17 @@ def display_pyramids(pyr, title="Pyramid"):
 def restore_image(l_pyr):
     recon_img = l_pyr[0]
     for i in range(1, PYRAMID_LEVELS):
+        # Upsample the reconstructed image
         recon_img = cv.pyrUp(recon_img)
+
+        # Resize the upsampled image to match the size of l_pyr[i]
+        recon_img = cv.resize(recon_img, (l_pyr[i].shape[1], l_pyr[i].shape[0]))
+
+        # Add the Laplacian pyramid level to the upsampled image
         recon_img = cv.add(recon_img, l_pyr[i])
 
     return recon_img
+
 
 
 def merge_pyramids(l_pyr_a, l_pyr_b, g_pyr_mask):
@@ -51,14 +58,22 @@ def get_g_pyr(img):
 
 
 def get_l_pyr(img):
-    g_pyr = get_g_pyr(img)
-    l_pyr = [g_pyr[PYRAMID_LEVELS - 1]]
+    g_pyr = get_g_pyr(img)  # Assume this function returns the Gaussian pyramid
+    l_pyr = [g_pyr[PYRAMID_LEVELS - 1]]  # Last level of Gaussian pyramid is the initial Laplacian
+
     for i in range(PYRAMID_LEVELS - 1, 0, -1):
+        # Upsample the Gaussian pyramid at level i
         expanded_g = cv.pyrUp(g_pyr[i])
+
+        # Resize the upsampled image to match the size of the image at level i-1
+        expanded_g = cv.resize(expanded_g, (g_pyr[i - 1].shape[1], g_pyr[i - 1].shape[0]))
+
+        # Subtract the upsampled image from the previous Gaussian pyramid image to get the Laplacian
         subtracted_l = cv.subtract(g_pyr[i - 1], expanded_g)
         l_pyr.append(subtracted_l)
 
     return l_pyr
+
 
 
 def blend_images(img_a, img_b, mask):
