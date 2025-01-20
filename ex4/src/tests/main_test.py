@@ -58,7 +58,7 @@ vid = np.array(video)
 grayscale_vid = [cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) for frame in vid]
 
 # Calculate the transformation matrices
-transforms = []
+transforms = [np.eye(3)[:2, :]]
 for i in range(1, len(vid)):
     trans = reworked.get_trans_mat(grayscale_vid[i - 1], grayscale_vid[i])
     transforms.append(trans)
@@ -68,11 +68,15 @@ stab_transforms = reworked.stabilize_transforms(transforms)
 
 c_transforms = reworked.get_cumulative_transforms(stab_transforms)
 
-# for i in range(len(transforms)):
-#     c_transforms[i + 1][1, 2] = transforms[i][1, 2]
+for i in range(len(transforms)):
+    c_transforms[i + 1][1, 2] = transforms[i][1, 2]
+
+canvas_shape = reworked.get_canvas_dimensions(vid, c_transforms)
+
+print(canvas_shape)
 
 # Warp frames onto the canvas using stabilized transformations
-canvas = reworked.warp_frame(vid, c_transforms)
+canvas = reworked.warp_frame(vid, transforms, canvas_shape)
 
 # stab_transforms = np.insert(stab_transforms, 0, np.eye(3)[:2, :])
 # c_transforms = np.insert(c_transforms, 0, np.eye(3))
