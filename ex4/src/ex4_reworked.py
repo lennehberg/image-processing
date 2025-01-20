@@ -20,22 +20,42 @@ def display_canvas_with_matplotlib(canvas):
 
 def get_trans_mat(frame_a, frame_b):
     """
-    align frame b to frame a
-    :param frame_a:
-    :param frame_b:
-    :return: transformation matrix between frame b and frame a.
+    Estimates the transformation matrix between two frames using feature matching and RANSAC.
+    :param frame_a: The first grayscale frame.
+    :param frame_b: The second grayscale frame.
+    :return: The 2x3 affine transformation matrix.
     """
-    # get feature points for lucas kanade
-    features1 = cv2.goodFeaturesToTrack(frame_a, maxCorners=100, qualityLevel=0.01, minDistance=1, blockSize=3)
-    # get features in frame 2 according to features in frame 1 and track them by lk
-    features2, status, error = cv2.calcOpticalFlowPyrLK(frame_a, frame_b, features1, None)
-    # filter out the good points
-    good_feats1 = features1[status == 1]
-    good_feats2 = features2[status == 1]
-    # estimate transformation matrix
-    # (assuming affine transformation as camera moves in a way that maintains parallel lines)
-    trans_mat, _ = cv2.estimateAffinePartial2D(good_feats1, good_feats2)
+    # Detect good features to track in the first frame
+    features1 = cv2.goodFeaturesToTrack(
+        frame_a, maxCorners=500, qualityLevel=0.01, minDistance=3, blockSize=7
+    )
+
+    # Ensure features were detected
+    if features1 is None:
+        raise ValueError("No features detected in the first frame.")
+
+    # Calculate optical flow to track these features in the second frame
+    features2, status, _ = cv2.calcOpticalFlowPyrLK(frame_a, frame_b, features1, None)
+
+    # Filter only valid points
+    valid_features1 = features1[status == 1].reshape(-1, 2)
+    valid_features2 = features2[status == 1].reshape(-1, 2)
+
+    # Check if we have enough valid points for estimation
+    if len(valid_features1) < 3 or len(valid_features2) < 3:
+        raise ValueError("Not enough valid feature matches to estimate the transformation.")
+
+    # Estimate the transformation matrix using RANSAC
+    trans_mat, inliers = cv2.estimateAffinePartial2D(
+        valid_features1, valid_features2, method=cv2.RANSAC, ransacReprojThreshold=3.0
+    )
+
+    # Ensure the transformation matrix was estimated successfully
+    if trans_mat is None:
+        raise ValueError("Transformation matrix estimation failed.")
+
     return trans_mat
+
 
 
 # 2. Stabilize Y translation and rotation
@@ -46,13 +66,15 @@ def stabilize_transforms(trans_mats):
     :return: list of stabilized transformation matrices
     """
     stabilized_transforms = []
-    # stab_dy = np.mean([mat[1, 2] for mat in trans_mats])
+    stab_dy = np.mean([mat[1, 2] for mat in trans_mats])
     for mat in trans_mats:
         dx = mat[0, 2]
+        dy = mat[1, 2]
+        
         # Stabilize by removing rotation and Y translation
         stable_mat = np.zeros(mat.shape)
         stable_mat[0, 2] = dx  # Keep X translation
-        stable_mat[1, 2] = 0  # Neutralize Y translation
+        stable_mat[1, 2] = dy  # Neutralize Y translation
         stable_mat[0, 0] = stable_mat[1, 1] = 1  # Neutralize rotation
         stable_mat[0, 1] = stable_mat[1, 0] = 0
         stabilized_transforms.append(stable_mat)
@@ -83,7 +105,7 @@ def get_canvas_dimensions(vid_frames, cumulative_mats):
     max_dy = np.max([mat[1, 2] for mat in cumulative_mats])
     min_dy = np.min([mat[1, 2] for mat in cumulative_mats])
 
-    total_dy = int(abs(min_dy - max_dy))
+    total_dy = int(abs(min_dy) + abs(max_dy))
 
     return height + total_dy, width + max_dx, 3
 
@@ -91,6 +113,7 @@ def get_canvas_dimensions(vid_frames, cumulative_mats):
 def warp_frame(vid_frames, mats, canvas_shape):
     """
     creates a canvas and warps frames onto it using cumulative_mats
+    :param canvas_shape:
     :param vid_frames:
     :param mats:
     :return:
@@ -113,48 +136,74 @@ def warp_frame(vid_frames, mats, canvas_shape):
     return canvas
 
 
-def make_pano(canvas, cumulative_mats, stab_mats, strip_center):
-    """
-    creates a panorama image by backward warping and pasting strips from canvas
-    :param canvas:
-    :param cumulative_mats:
-    :return:
-    """
-    # display_canvas_with_matplotlib(canvas[441])
-    pano_frame = np.zeros(canvas[0].shape)
-    cur_strip_center, prev_strip_center = 0, 0
+def get_first_strip(aligned_frame, strip_center):
+    end = int(np.ceil(strip_center))
+    return aligned_frame[:, :end, :]
 
-    # strip_width_r = abs(int(np.mean([mat[0, 2] for mat in stab_mats])))
-    for i in range(1, len(canvas)):  # start from 1 because 0 has empty canvas
-        # estimate the strip's width by setting it to the dx motion from this frame to the next on the right
-        # and the previous frame to this on the left
-        if i > 0:
-            strip_width_l = abs(stab_mats[i - 1][0, 2])
-        else:
-            strip_width_l = 0
+
+def get_strip(aligned_frame, strip_center, l_strip_width, r_strip_width):
+    start = int(np.floor(strip_center - l_strip_width))
+    end = int(np.ceil(strip_center + r_strip_width))
+    return aligned_frame[:, start: end]
+
+
+def get_last_strip(aligned_frame, strip_center):
+    frame_width = aligned_frame.shape[1]
+    start = int(np.floor(frame_width - strip_center))
+    return aligned_frame[:, start:, :]
+
+
+def make_pano(canvas, cumulative_mats, stab_mats, strip_center, frame_width):
+    """
+    Creates a panorama image by backward warping and pasting strips from frames.
+    :param canvas: List of warped frames.
+    :param cumulative_mats: List of cumulative transformation matrices.
+    :param stab_mats: List of stabilized transformation matrices.
+    :param strip_center: Initial center of the strip in the frame.
+    :param frame_width: Width of the video frames.
+    :return: The completed panorama image.
+    """
+    pano_frame = np.zeros(canvas[0].shape, dtype=canvas[0].dtype)  # Initialize the panorama frame
+    strip_pos = 0  # Track the horizontal position to paste strips
+
+    for i in range(1, len(canvas)):  # Start from 1 because canvas[0] is empty
+        # Compute the left and right widths of the strip
+        l_strip_width = int(np.floor(abs(stab_mats[i - 1][0, 2] / 2)))
+
         if i < len(canvas) - 1:
-            strip_width_r = abs(stab_mats[i][0, 2])
+            r_strip_width = int(np.ceil(abs(stab_mats[i][0, 2] / 2)))
         else:
-            strip_width_r = 0
+            r_strip_width = frame_width - strip_center
 
-        # copy the values from the overlap between the frame and the strip
-        strip = canvas[i][:, int(np.floor(strip_center - strip_width_l)): int(np.ceil(strip_center + strip_width_r))]
+        # Extract the strip based on its position
+        if i == 1:
+            strip = get_first_strip(canvas[i], strip_center)
+        elif i < len(canvas) - 1:
+            strip = get_strip(canvas[i], strip_center, l_strip_width, r_strip_width)
+        else:
+            strip = get_last_strip(canvas[i], strip_center)
 
-        # display_canvas_with_matplotlib(strip)
-        # backward warp the strip onto the canvas
-        warped_strip = cv2.warpAffine(strip, cumulative_mats[i - 1][:2, :], (pano_frame.shape[1], pano_frame.shape[0]),
-                                      flags=cv2.WARP_INVERSE_MAP)
+        # Warp the entire frame to the panorama's coordinate space
+        warped_strip = cv2.warpAffine(
+            canvas[i], cumulative_mats[i - 1][:2, :],
+            (pano_frame.shape[1], pano_frame.shape[0]),
+            flags=cv2.WARP_INVERSE_MAP
+        )
+
         # display_canvas_with_matplotlib(warped_strip)
-        if i > 1:
-            mask = np.zeros(pano_frame.shape)
-            print(prev_strip_center, cur_strip_center)
-            mask[:, int(prev_strip_center): int(strip_center), :] = 255
-            pano_frame = np.maximum(warped_strip, pano_frame)
-            # display_canvas_with_matplotlib(mask)
-            pano_frame = pyramid_blend.blend_images(warped_strip, pano_frame, mask)
-        else:
-            pano_frame = warped_strip
-        prev_strip_center = cur_strip_center
-        cur_strip_center += strip_width_r
-        # display_canvas_with_matplotlib(pano_frame)
+        # Extract only the part of the warped strip corresponding to the current strip
+        strip_width = strip.shape[1]
+        strip_start = strip_pos
+        strip_end = strip_start + strip_width
+        strip_segment = warped_strip[:, strip_start:strip_end, :]  # Extract the required part
+        # display_canvas_with_matplotlib(strip_segment)
+
+        # Paste the relevant part of the warped strip into the panorama frame
+        pano_frame[:, strip_start:strip_end, :] = strip_segment
+
+        # Update the strip position
+        strip_pos = strip_end
+
     return pano_frame
+
+

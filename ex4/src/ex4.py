@@ -29,7 +29,7 @@ def get_trans_mat(frame_a, frame_b):
     :return: transformation matrix between frame b and frame a.
     """
     # get feature points for lucas kanade
-    features1 = cv2.goodFeaturesToTrack(frame_a, maxCorners=100, qualityLevel=0.01, minDistance=1, blockSize=3)
+    features1 = cv2.goodFeaturesToTrack(frame_a, maxCorners=100, qualityLevel=0.01, minDistance=1, blockSize=4)
 
     # get features in frame 2 according to features in frame 1 and track them by lk
     features2, status, error = cv2.calcOpticalFlowPyrLK(frame_a, frame_b, features1, None)
