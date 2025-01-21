@@ -57,7 +57,6 @@ def get_trans_mat(frame_a, frame_b):
     return trans_mat
 
 
-
 # 2. Stabilize Y translation and rotation
 def stabilize_transforms(trans_mats):
     """
@@ -66,15 +65,18 @@ def stabilize_transforms(trans_mats):
     :return: list of stabilized transformation matrices
     """
     stabilized_transforms = []
-    stab_dy = np.mean([mat[1, 2] for mat in trans_mats])
-    for mat in trans_mats:
+
+    for ind, mat in enumerate(trans_mats):
         dx = mat[0, 2]
         dy = mat[1, 2]
-        
+
+        if abs(dy) > 4:
+            dy = 0
+
         # Stabilize by removing rotation and Y translation
         stable_mat = np.zeros(mat.shape)
         stable_mat[0, 2] = dx  # Keep X translation
-        stable_mat[1, 2] = dy  # Neutralize Y translation
+        stable_mat[1, 2] = 0  # Neutralize Y translation
         stable_mat[0, 0] = stable_mat[1, 1] = 1  # Neutralize rotation
         stable_mat[0, 1] = stable_mat[1, 0] = 0
         stabilized_transforms.append(stable_mat)
@@ -205,5 +207,3 @@ def make_pano(canvas, cumulative_mats, stab_mats, strip_center, frame_width):
         strip_pos = strip_end
 
     return pano_frame
-
-

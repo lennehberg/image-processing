@@ -78,6 +78,9 @@ print(canvas_shape)
 # Warp frames onto the canvas using stabilized transformations
 canvas = reworked.warp_frame(vid, transforms, canvas_shape)
 
+media.write_video("stable.mp4", canvas[1:])
+
+
 # stab_transforms = np.insert(stab_transforms, 0, np.eye(3)[:2, :])
 # c_transforms = np.insert(c_transforms, 0, np.eye(3))
 
@@ -91,48 +94,48 @@ display_canvas_with_matplotlib(center_pano)
 
 # anchoring to middle frame
 
-l_frames = vid[:len(vid) // 2]
-l_frames = l_frames[::-1]  # reverse the array for proper matrix calulations
-r_frames = vid[len(vid) // 2:]
-
-l_gray = [cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) for frame in l_frames]
-r_gray = [cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) for frame in r_frames]
-
-l_transforms = [np.eye(3)[:2, :]]
-for i in range(1, len(l_frames)):
-    trans = reworked.get_trans_mat(l_gray[i - 1], l_gray[i])
-    l_transforms.append(trans)
-
-
-r_transforms = [np.eye(3)[:2, :]]
-for i in range(1, len(r_frames)):
-    trans = reworked.get_trans_mat(r_gray[i - 1], r_gray[i])
-    r_transforms.append(trans)
-
-# Stabilize the transformations
-l_stab_transforms = reworked.stabilize_transforms(l_transforms)
-r_stab_transforms = reworked.stabilize_transforms(r_transforms)
-
-l_c_transforms = reworked.get_cumulative_transforms(l_stab_transforms)
-r_c_transforms = reworked.get_cumulative_transforms(r_stab_transforms)
-
-# for i in range(len(transforms)):
-#     c_transforms[i + 1][1, 2] = transforms[i][1, 2]
-
-l_canvas_shape = reworked.get_canvas_dimensions(l_frames, l_c_transforms)
-r_canvas_shape = reworked.get_canvas_dimensions(r_frames, r_c_transforms)
-
-print(l_canvas_shape, r_canvas_shape)
-
-# Warp frames onto the canvas using stabilized transformations
-l_canvas = reworked.warp_frame(l_frames, l_transforms, l_canvas_shape)
-r_canvas = reworked.warp_frame(r_frames, r_transforms, r_canvas_shape)
-
-# stab_transforms = np.insert(stab_transforms, 0, np.eye(3)[:2, :])
-# c_transforms = np.insert(c_transforms, 0, np.eye(3))
-
-l_center_pano = reworked.make_pano(l_canvas, l_c_transforms, l_transforms, len(l_frames[0]) // 2, l_frames[0].shape[1])
-r_center_pano = reworked.make_pano(r_canvas, r_c_transforms, r_transforms, len(r_frames[0]) // 2, r_frames[0].shape[1])
-
-display_canvas_with_matplotlib(l_center_pano)
-display_canvas_with_matplotlib(r_center_pano)
+# l_frames = vid[:len(vid) // 2]
+# l_frames = l_frames[::-1]  # reverse the array for proper matrix calulations
+# r_frames = vid[len(vid) // 2:]
+#
+# l_gray = [cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) for frame in l_frames]
+# r_gray = [cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) for frame in r_frames]
+#
+# l_transforms = [np.eye(3)[:2, :]]
+# for i in range(1, len(l_frames)):
+#     trans = reworked.get_trans_mat(l_gray[i - 1], l_gray[i])
+#     l_transforms.append(trans)
+#
+#
+# r_transforms = [np.eye(3)[:2, :]]
+# for i in range(1, len(r_frames)):
+#     trans = reworked.get_trans_mat(r_gray[i - 1], r_gray[i])
+#     r_transforms.append(trans)
+#
+# # Stabilize the transformations
+# l_stab_transforms = reworked.stabilize_transforms(l_transforms)
+# r_stab_transforms = reworked.stabilize_transforms(r_transforms)
+#
+# l_c_transforms = reworked.get_cumulative_transforms(l_stab_transforms)
+# r_c_transforms = reworked.get_cumulative_transforms(r_stab_transforms)
+#
+# # for i in range(len(transforms)):
+# #     c_transforms[i + 1][1, 2] = transforms[i][1, 2]
+#
+# l_canvas_shape = reworked.get_canvas_dimensions(l_frames, l_c_transforms)
+# r_canvas_shape = reworked.get_canvas_dimensions(r_frames, r_c_transforms)
+#
+# print(l_canvas_shape, r_canvas_shape)
+#
+# # Warp frames onto the canvas using stabilized transformations
+# l_canvas = reworked.warp_frame(l_frames, l_transforms, l_canvas_shape)
+# r_canvas = reworked.warp_frame(r_frames, r_transforms, r_canvas_shape)
+#
+# # stab_transforms = np.insert(stab_transforms, 0, np.eye(3)[:2, :])
+# # c_transforms = np.insert(c_transforms, 0, np.eye(3))
+#
+# l_center_pano = reworked.make_pano(l_canvas, l_c_transforms, l_transforms, len(l_frames[0]) // 2, l_frames[0].shape[1])
+# r_center_pano = reworked.make_pano(r_canvas, r_c_transforms, r_transforms, len(r_frames[0]) // 2, r_frames[0].shape[1])
+#
+# display_canvas_with_matplotlib(l_center_pano)
+# display_canvas_with_matplotlib(r_center_pano)
