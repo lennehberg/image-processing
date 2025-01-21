@@ -1,3 +1,4 @@
+import os
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
@@ -27,7 +28,7 @@ def get_trans_mat(frame_a, frame_b):
     """
     # Detect good features to track in the first frame
     features1 = cv2.goodFeaturesToTrack(
-        frame_a, maxCorners=500, qualityLevel=0.01, minDistance=3, blockSize=7
+        frame_a, maxCorners=500, qualityLevel=0.12, minDistance=10, blockSize=4
     )
 
     # Ensure features were detected
@@ -47,7 +48,7 @@ def get_trans_mat(frame_a, frame_b):
 
     # Estimate the transformation matrix using RANSAC
     trans_mat, inliers = cv2.estimateAffinePartial2D(
-        valid_features1, valid_features2, method=cv2.RANSAC, ransacReprojThreshold=3.0
+        valid_features1, valid_features2, method=cv2.RANSAC, ransacReprojThreshold=0.5
     )
 
     # Ensure the transformation matrix was estimated successfully
@@ -58,7 +59,7 @@ def get_trans_mat(frame_a, frame_b):
 
 
 # 2. Stabilize Y translation and rotation
-def stabilize_transforms(trans_mats):
+def stabilize_transforms(trans_mats, window_size=5):
     """
     nullify Y translation and rotations of a transformation matrix
     :param trans_mats: list of transformation matrices to stabilize
@@ -66,16 +67,27 @@ def stabilize_transforms(trans_mats):
     """
     stabilized_transforms = []
 
+    y_translations = [mat[1, 2] for mat in trans_mats]
+
+    # Compute smoothed y-translations using a moving average
+    smoothed_y_translations = []
+    for i in range(len(y_translations)):
+        start = max(0, i - window_size // 2)
+        end = min(len(y_translations), i + window_size // 2 + 1)
+        smoothed_y_translations.append(np.mean(y_translations[start:end]))
+
     for ind, mat in enumerate(trans_mats):
         dx = mat[0, 2]
         dy = mat[1, 2]
 
-        if abs(dy) > 4:
-            dy = 0
+        # if abs(dy) > 2 or abs(dy) < 1.5:
+        #     dy = 0
 
         # Stabilize by removing rotation and Y translation
         stable_mat = np.zeros(mat.shape)
         stable_mat[0, 2] = dx  # Keep X translation
+        if abs(smoothed_y_translations[ind]) > 4:
+            smoothed_y_translations[ind] = 0
         stable_mat[1, 2] = 0  # Neutralize Y translation
         stable_mat[0, 0] = stable_mat[1, 1] = 1  # Neutralize rotation
         stable_mat[0, 1] = stable_mat[1, 0] = 0
@@ -122,15 +134,16 @@ def warp_frame(vid_frames, mats, canvas_shape):
     """
     canvas_shape = canvas_shape
     canvas = [np.zeros(canvas_shape, dtype=vid_frames[0].dtype)]
-    display_canvas_with_matplotlib(canvas[0])
+    # display_canvas_with_matplotlib(canvas[0])
     # for each frame in vid_frames, warp the frame according to the
     # transform in cumulative transforms (where first us anchor and first mat
     # is the identity, and so on...)
     for ind, frame in enumerate(vid_frames):
         # because cumulative mats are 3x3, only extract the first 2 rows (so mat is 2x3)
         warp_mat = mats[ind][:2, :]
+        # warp_mat[0, 2] = 0  # nullify x movement
         # backward warp the frame onto the canvas
-        warped_frame = cv2.warpAffine(frame, warp_mat, (frame.shape[1], frame.shape[0]), flags=cv2.WARP_INVERSE_MAP)
+        warped_frame = cv2.warpAffine(frame, warp_mat, (canvas_shape[1], canvas_shape[0]), flags=cv2.WARP_INVERSE_MAP)
 
         # display_canvas_with_matplotlib(warped_frame)
         # append the warped frame to the canvas
@@ -139,14 +152,96 @@ def warp_frame(vid_frames, mats, canvas_shape):
 
 
 def get_first_strip(aligned_frame, strip_center):
-    end = int(np.ceil(strip_center))
+    end = 0  # int(np.ceil(strip_center))
     return aligned_frame[:, :end, :]
 
 
+count = 0
+
+
+def save_strip_with_box(aligned_frame, start, end):
+    """
+    Displays the aligned frame with a red box highlighting the strip region and saves the plot.
+
+    :param aligned_frame: The aligned frame (3D array if RGB or 2D for grayscale).
+    :param start: The starting column of the strip.
+    :param end: The ending column of the strip.
+    :param filename: The name of the file to save the plot.
+    """
+    global count
+    # Ensure the start and end values are within the frame dimensions
+    start = max(0, start)
+    end = min(aligned_frame.shape[1], end)
+
+    filename = f"strip{count}_plot.png"
+
+    count += 1
+
+    # Make a copy of the frame to draw the rectangle
+    if aligned_frame.ndim == 2:  # Grayscale
+        aligned_frame_display = cv2.cvtColor(aligned_frame, cv2.COLOR_GRAY2BGR)
+    else:  # RGB
+        aligned_frame_display = aligned_frame.copy()
+
+    # Draw a red rectangle around the strip region
+    color = (255, 0, 0)  # Red color in BGR
+    cv2.rectangle(aligned_frame_display, (start, 0), (end, aligned_frame.shape[0]), color, thickness=2)
+
+    # Ensure the "plots" folder exists
+    os.makedirs("plots", exist_ok=True)
+
+    # Display the frame with the highlighted strip and save the plot
+    plt.imshow(cv2.cvtColor(aligned_frame_display, cv2.COLOR_BGR2RGB))  # Convert BGR to RGB for display
+    plt.title(f"Strip from {start} to {end}")
+    plt.axis('off')
+    save_path = os.path.join("plots", filename)
+    plt.savefig(save_path, bbox_inches='tight', pad_inches=0)
+    plt.close()  # Close the plot to avoid display overlap
+
+    # Return the extracted strip for further use
+    return aligned_frame[:, start:end, :]
+
+
+def display_strip_with_box(aligned_frame, start, end):
+    """
+    Displays the aligned frame with a red box highlighting the strip region.
+
+    :param aligned_frame: The aligned frame (3D array if RGB or 2D for grayscale).
+    :param start: The starting column of the strip.
+    :param end: The ending column of the strip.
+    """
+    # Ensure the start and end values are within the frame dimensions
+    start = max(0, start)
+    end = min(aligned_frame.shape[1], end)
+
+    # Make a copy of the frame to draw the rectangle
+    if aligned_frame.ndim == 2:  # Grayscale
+        aligned_frame_display = cv2.cvtColor(aligned_frame, cv2.COLOR_GRAY2BGR)
+    else:  # RGB
+        aligned_frame_display = aligned_frame.copy()
+
+    # Draw a red rectangle around the strip region
+    color = (255, 0, 0)  # Red color in BGR
+    cv2.rectangle(aligned_frame_display, (start, 0), (end, aligned_frame.shape[0]), color, thickness=2)
+
+    # Display the frame with the highlighted strip
+    plt.imshow(cv2.cvtColor(aligned_frame_display, cv2.COLOR_BGR2RGB))  # Convert BGR to RGB for display
+    plt.title(f"Strip from {start} to {end}")
+    plt.axis('off')
+    plt.show()
+
+    # Return the extracted strip for further use
+    return aligned_frame[:, start:end, :]
+
+
 def get_strip(aligned_frame, strip_center, l_strip_width, r_strip_width):
+    global count
     start = int(np.floor(strip_center - l_strip_width))
-    end = int(np.ceil(strip_center + r_strip_width))
-    return aligned_frame[:, start: end]
+    end = int(np.floor(strip_center + r_strip_width))
+    # print(start, end)
+    count += 1
+    # save_strip_with_box(aligned_frame, start, end)
+    return aligned_frame[:, start: end, :]
 
 
 def get_last_strip(aligned_frame, strip_center):
@@ -168,42 +263,50 @@ def make_pano(canvas, cumulative_mats, stab_mats, strip_center, frame_width):
     pano_frame = np.zeros(canvas[0].shape, dtype=canvas[0].dtype)  # Initialize the panorama frame
     strip_pos = 0  # Track the horizontal position to paste strips
 
-    for i in range(1, len(canvas)):  # Start from 1 because canvas[0] is empty
+    for i in range(1, len(canvas) - 1):  # Start from 1 because canvas[0] is empty
         # Compute the left and right widths of the strip
-        l_strip_width = int(np.floor(abs(stab_mats[i - 1][0, 2] / 2)))
+        # print(strip_center)
+        l_strip_width = int(np.round(abs(stab_mats[i - 1][0, 2] / 2)))
 
         if i < len(canvas) - 1:
-            r_strip_width = int(np.ceil(abs(stab_mats[i][0, 2] / 2)))
+            r_strip_width = int(np.round(abs(stab_mats[i][0, 2] / 2)))
+            # print(r_strip_width)
         else:
             r_strip_width = frame_width - strip_center
 
         # Extract the strip based on its position
         if i == 1:
-            strip = get_first_strip(canvas[i], strip_center)
-        elif i < len(canvas) - 1:
+            l_strip_width = strip_center
+            # strip = get_first_strip(canvas[i], strip_center)
+
+        if i < len(canvas) - 1:
+            # display_canvas_with_matplotlib(canvas[i])
             strip = get_strip(canvas[i], strip_center, l_strip_width, r_strip_width)
         else:
             strip = get_last_strip(canvas[i], strip_center)
 
         # Warp the entire frame to the panorama's coordinate space
-        warped_strip = cv2.warpAffine(
-            canvas[i], cumulative_mats[i - 1][:2, :],
-            (pano_frame.shape[1], pano_frame.shape[0]),
-            flags=cv2.WARP_INVERSE_MAP
-        )
+        # warped_strip = cv2.warpAffine(
+        #     strip, cumulative_mats[i - 1][:2, :],
+        #     (pano_frame.shape[1], pano_frame.shape[0]),
+        #     flags=cv2.WARP_INVERSE_MAP
+        # )
 
-        # display_canvas_with_matplotlib(warped_strip)
+        # display_canvas_with_matplotlib(strip)
         # Extract only the part of the warped strip corresponding to the current strip
         strip_width = strip.shape[1]
-        strip_start = strip_pos
-        strip_end = strip_start + strip_width
-        strip_segment = warped_strip[:, strip_start:strip_end, :]  # Extract the required part
+        strip_start = int(np.floor(strip_center - l_strip_width))
+        strip_end = int(np.floor(strip_center + r_strip_width))
+        strip_segment = strip[:, strip_start:strip_end, :]  # Extract the required part
+        # display_strip_with_box(strip, strip_start, strip_end)
         # display_canvas_with_matplotlib(strip_segment)
 
         # Paste the relevant part of the warped strip into the panorama frame
-        pano_frame[:, strip_start:strip_end, :] = strip_segment
+        pano_frame[:, strip_start:strip_end, :] = strip
+        # save_strip_with_box(pano_frame, strip_start, strip_end)
 
         # Update the strip position
         strip_pos = strip_end
+        strip_center = strip_end + r_strip_width
 
     return pano_frame
