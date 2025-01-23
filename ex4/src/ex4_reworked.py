@@ -1,8 +1,10 @@
 import os
+import sys
 import cv2
 import numpy as np
+import mediapy as media
 import matplotlib.pyplot as plt
-import ex3.src.pyramid_blend as pyramid_blend
+# import ex3.src.pyramid_blend as pyramid_blend
 
 
 def display_canvas_with_matplotlib(canvas):
@@ -28,7 +30,7 @@ def get_trans_mat(frame_a, frame_b):
     """
     # Detect good features to track in the first frame
     features1 = cv2.goodFeaturesToTrack(
-        frame_a, maxCorners=500, qualityLevel=0.12, minDistance=10, blockSize=4
+        frame_a, maxCorners=0, qualityLevel=0.07,  minDistance=11, blockSize=20
     )
 
     # Ensure features were detected
@@ -36,7 +38,7 @@ def get_trans_mat(frame_a, frame_b):
         raise ValueError("No features detected in the first frame.")
 
     # Calculate optical flow to track these features in the second frame
-    features2, status, _ = cv2.calcOpticalFlowPyrLK(frame_a, frame_b, features1, None)
+    features2, status, _ = cv2.calcOpticalFlowPyrLK(frame_a, frame_b, features1, None, maxLevel=50)
 
     # Filter only valid points
     valid_features1 = features1[status == 1].reshape(-1, 2)
@@ -48,7 +50,7 @@ def get_trans_mat(frame_a, frame_b):
 
     # Estimate the transformation matrix using RANSAC
     trans_mat, inliers = cv2.estimateAffinePartial2D(
-        valid_features1, valid_features2, method=cv2.RANSAC, ransacReprojThreshold=0.5
+        valid_features1, valid_features2, method=cv2.RANSAC, ransacReprojThreshold=0.75
     )
 
     # Ensure the transformation matrix was estimated successfully
@@ -302,7 +304,8 @@ def make_pano(canvas, cumulative_mats, stab_mats, strip_center, frame_width):
         # display_canvas_with_matplotlib(strip_segment)
 
         # Paste the relevant part of the warped strip into the panorama frame
-        pano_frame[:, strip_start:strip_end, :] = strip
+        if i > 1:
+            pano_frame[:, strip_start:strip_end, :] = strip
         # save_strip_with_box(pano_frame, strip_start, strip_end)
 
         # Update the strip position
@@ -310,3 +313,89 @@ def make_pano(canvas, cumulative_mats, stab_mats, strip_center, frame_width):
         strip_center = strip_end + r_strip_width
 
     return pano_frame
+
+
+def make_canvas(vid):
+    # Convert video frames to grayscale
+    grayscale_vid = [cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) for frame in vid]
+
+    print("generating transforms...")
+    # Calculate the transformation matrices
+    transforms = [np.eye(3)[:2, :]]
+    for i in range(1, len(vid)):
+        trans = get_trans_mat(grayscale_vid[i - 1], grayscale_vid[i])
+        transforms.append(trans)
+
+    # Stabilize the transformations
+    print("stabilizing...")
+    stab_trans_no_y = stabilize_transforms(transforms)
+    stab_transforms = stab_trans_no_y.copy()
+
+    for i in range(len(transforms)):
+        stab_transforms[i][1, 2] = transforms[i][1, 2]
+
+    # stabilize the frames
+    print("aligning...")
+    aligned_images = warp_frame(vid, stab_transforms, vid[0].shape[:2])
+    # get cumulative transforms
+    c_transforms = get_cumulative_transforms(stab_transforms)
+
+    # compute canvas shape from cumulative transforms
+    canvas_shape = get_canvas_dimensions(vid, c_transforms)
+    print(canvas_shape)
+
+    # warp the frames to the canvas
+    print("warping canvas...")
+    canvas = warp_frame(aligned_images[1:], c_transforms, canvas_shape)
+
+    return canvas, c_transforms, stab_transforms
+
+
+def stitch_stereo_pano(canvas, c_transforms, stab_transforms, vid):
+    stereo_pano = []
+    offset = -60
+    for i in range(120):
+        center_pano = make_pano(canvas, c_transforms, stab_transforms, len(vid[0]) // 2 + offset, vid[0].shape[1])
+        offset += 2
+        stereo_pano.append(center_pano)
+        print(offset)
+
+    stereo_pano_full = stereo_pano.copy()
+
+    stereo_pano.reverse()
+    for frame in stereo_pano:
+        stereo_pano_full.append(frame)
+
+    return stereo_pano_full
+
+
+def main(vid_path, pano_method, out_file_path):
+    """
+    turns a video into a pano by pano_method
+    :param vid_path: path to vid
+    :param pano_method: 0 - STEREO, 1- DYNAMIC
+    :param out_file_path: path for output file
+    :return: pano video
+    """
+    # read video into array
+    video = media.read_video(vid_path)
+
+    vid = np.array(video)
+    # vid = vid[::-1]
+    print("generating canvas...")
+    canvas, c_transforms, stab_transforms = make_canvas(vid)
+    stereo_pano = None
+
+    print("stitching panorama...")
+    if pano_method == '0':
+        stereo_pano = stitch_stereo_pano(canvas, c_transforms, stab_transforms, vid)
+
+    print("writing video...")
+    try:
+        media.write_video(out_file_path, stereo_pano[:10])
+    except Exception as e:
+        print(f"Error writing video: {e}")
+
+
+if __name__ == "__main__":
+    main(sys.argv[1], sys.argv[2], sys.argv[3])

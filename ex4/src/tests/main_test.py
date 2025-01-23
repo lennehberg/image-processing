@@ -52,7 +52,7 @@ raw_frame_d = np.array([[0, 0, 0, 0, 0, 0, 0, 0],
 syn_vid = [raw_frame_a, raw_frame_b, raw_frame_c, raw_frame_d]
 
 # Read the video
-video = media.read_video("../../ex4-vids/boat.mp4")
+video = media.read_video("../../ex4-vids/Iguazu.mp4")
 vid = np.array(video)
 
 # Convert video frames to grayscale
@@ -83,32 +83,32 @@ print(canvas_shape)
 # Warp frames onto the canvas using stabilized transformations
 canvas = reworked.warp_frame(aligned_images[1:], c_transforms, canvas_shape)
 
-media.write_video("stable.mp4", canvas[1:])
+# media.write_video("stable.mp4", canvas[1:])
 
 # stab_transforms = np.insert(stab_transforms, 0, np.eye(3)[:2, :])
 # c_transforms = np.insert(c_transforms, 0, np.eye(3))
 
-# center_pano = reworked.make_pano(canvas, c_transforms, stab_transforms, len(vid[0]) // 2, vid[0].shape[1])
+center_pano = reworked.make_pano(canvas, c_transforms, stab_transforms, len(vid[0]) // 2, vid[0].shape[1])
 #
-stereo_pano = []
-offset = -240
-for i in range (120):
-    center_pano = reworked.make_pano(canvas, c_transforms, stab_transforms, len(vid[0]) // 2 + offset, vid[0].shape[1])
-    offset += 4
-    stereo_pano.append(center_pano)
-    print(offset)
-
-stereo_pano_full = stereo_pano.copy()
-
-stereo_pano.reverse()
-for frame in stereo_pano:
-    stereo_pano_full.append(frame)
-
-
-
-# stereo_pano = np.array(stereo_pano_full)
-
-media.write_video("first.mp4", stereo_pano_full)
+# stereo_pano = []
+# offset = -120
+# for i in range (120):
+#     center_pano = reworked.make_pano(canvas, c_transforms, stab_transforms, len(vid[0]) // 2 + offset, vid[0].shape[1])
+#     offset += 4
+#     stereo_pano.append(center_pano)
+#     print(offset)
+#
+# stereo_pano_full = stereo_pano.copy()
+#
+# stereo_pano.reverse()
+# for frame in stereo_pano:
+#     stereo_pano_full.append(frame)
+#
+#
+#
+# # stereo_pano = np.array(stereo_pano_full)
+#
+# media.write_video("first.mp4", stereo_pano_full)
 
 display_canvas_with_matplotlib(center_pano)
 
