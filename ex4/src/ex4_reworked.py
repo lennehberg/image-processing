@@ -82,15 +82,15 @@ def stabilize_transforms(trans_mats, window_size=5):
         dx = mat[0, 2]
         dy = mat[1, 2]
 
-        # if abs(dy) > 2 or abs(dy) < 1.5:
-        #     dy = 0
+        if abs(dy) < 2:
+            dy = 0
 
         # Stabilize by removing rotation and Y translation
         stable_mat = np.zeros(mat.shape)
         stable_mat[0, 2] = dx  # Keep X translation
         if abs(smoothed_y_translations[ind]) > 4:
             smoothed_y_translations[ind] = 0
-        stable_mat[1, 2] = 0  # Neutralize Y translation
+        stable_mat[1, 2] = dy # Neutralize Y translation
         stable_mat[0, 0] = stable_mat[1, 1] = 1  # Neutralize rotation
         stable_mat[0, 1] = stable_mat[1, 0] = 0
         stabilized_transforms.append(stable_mat)
@@ -247,9 +247,11 @@ def get_strip(aligned_frame, strip_center, l_strip_width, r_strip_width):
 
 
 def get_last_strip(aligned_frame, strip_center):
+    print('here')
     frame_width = aligned_frame.shape[1]
     start = int(np.floor(frame_width - strip_center))
-    return aligned_frame[:, start:, :]
+    # display_strip_with_box(aligned_frame, strip_center, frame_width)
+    return aligned_frame[:, strip_center: frame_width, :]
 
 
 def make_pano(canvas, cumulative_mats, stab_mats, strip_center, frame_width):
@@ -281,7 +283,7 @@ def make_pano(canvas, cumulative_mats, stab_mats, strip_center, frame_width):
             l_strip_width = strip_center
             # strip = get_first_strip(canvas[i], strip_center)
 
-        if i < len(canvas) - 1:
+        if i < len(canvas) - 2:
             # display_canvas_with_matplotlib(canvas[i])
             strip = get_strip(canvas[i], strip_center, l_strip_width, r_strip_width)
         else:
@@ -304,8 +306,11 @@ def make_pano(canvas, cumulative_mats, stab_mats, strip_center, frame_width):
         # display_canvas_with_matplotlib(strip_segment)
 
         # Paste the relevant part of the warped strip into the panorama frame
-        if i > 1:
+        if len(canvas) - 2 > i >= 1:
             pano_frame[:, strip_start:strip_end, :] = strip
+        else:
+            # display_canvas_with_matplotlib(strip)
+            pano_frame[:, strip_center:, :] = strip
         # save_strip_with_box(pano_frame, strip_start, strip_end)
 
         # Update the strip position
@@ -336,7 +341,7 @@ def make_canvas(vid):
 
     # stabilize the frames
     print("aligning...")
-    aligned_images = warp_frame(vid, stab_transforms, vid[0].shape[:2])
+    aligned_images = warp_frame(vid, stab_trans_no_y, vid[0].shape[:2])
     # get cumulative transforms
     c_transforms = get_cumulative_transforms(stab_transforms)
 
@@ -354,7 +359,7 @@ def make_canvas(vid):
 def stitch_stereo_pano(canvas, c_transforms, stab_transforms, vid):
     stereo_pano = []
     offset = -60
-    for i in range(120):
+    for i in range(60):
         center_pano = make_pano(canvas, c_transforms, stab_transforms, len(vid[0]) // 2 + offset, vid[0].shape[1])
         offset += 2
         stereo_pano.append(center_pano)
@@ -366,7 +371,13 @@ def stitch_stereo_pano(canvas, c_transforms, stab_transforms, vid):
     for frame in stereo_pano:
         stereo_pano_full.append(frame)
 
+    print(len(stereo_pano_full))
+
     return stereo_pano_full
+
+
+def stitch_dynamic_pano(canvas, c_transforms, stab_transforms, vid):
+    dynamic_pano = []
 
 
 def main(vid_path, pano_method, out_file_path):
@@ -378,10 +389,23 @@ def main(vid_path, pano_method, out_file_path):
     :return: pano video
     """
     # read video into array
-    video = media.read_video(vid_path)
+    video = []
+    for frame in media.read_video(vid_path):
+        video.append(frame)
 
     vid = np.array(video)
     # vid = vid[::-1]
+
+    # # rotate video 90 degrees to the right
+    # rotated_vid = []
+    # frame_height = vid.shape[1]
+    # frame_width = vid.shape[2]
+    # for frame in vid:
+    #     # M = np.array([[0, 1, 0], [-1, 0, frame_height]], dtype=float)
+    #     rotated_frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+    #     rotated_vid.append(rotated_frame)
+    #     # display_canvas_with_matplotlib(rotated_frame)
+
     print("generating canvas...")
     canvas, c_transforms, stab_transforms = make_canvas(vid)
     stereo_pano = None
@@ -390,9 +414,14 @@ def main(vid_path, pano_method, out_file_path):
     if pano_method == '0':
         stereo_pano = stitch_stereo_pano(canvas, c_transforms, stab_transforms, vid)
 
+    rotated_pano = []
+    for frame in stereo_pano:
+        rotated_frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
+        rotated_pano.append(rotated_frame)
+
     print("writing video...")
     try:
-        media.write_video(out_file_path, stereo_pano[:10])
+        media.write_video(out_file_path, stereo_pano)
     except Exception as e:
         print(f"Error writing video: {e}")
 
