@@ -1,0 +1,7 @@
+sys
+matplotlib
+librosa
+numpy
+scipy
+PIL
+soundfile
